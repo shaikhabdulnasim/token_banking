@@ -4,3 +4,4 @@ sqlalchemy
 pydantic
 apscheduler
 google-genai
+redis

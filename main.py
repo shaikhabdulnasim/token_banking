@@ -1,4 +1,5 @@
 import os
+import redis_client
 from fastapi.responses import HTMLResponse
 from fastapi import FastAPI, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -89,20 +90,69 @@ def create_wallet(user: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     return {"status": "success", "wallet": new_wallet}
 
+# @app.get("/users/{user_id}/balance")
+# def get_balance(user_id: str, db: Session = Depends(get_db)):
+#     wallet = db.query(models.Wallet).filter(models.Wallet.user_id == user_id).first()
+#     if not wallet:
+#         raise HTTPException(status_code=404, detail="User not found")
+#     available_today = wallet.daily_quota - wallet.daily_used
+#     return {
+#         "user_id": wallet.user_id,
+#         "daily_quota": wallet.daily_quota,
+#         "daily_used": wallet.daily_used,
+#         "available_daily": available_today,
+#         "bank_reserve": wallet.bank_reserve,
+#         "total_available_tokens": available_today + wallet.bank_reserve
+#     }
+
+
 @app.get("/users/{user_id}/balance")
 def get_balance(user_id: str, db: Session = Depends(get_db)):
+    # 1. Pehle Safe Redis Cache Check
+    try:
+        cached = redis_client.get_cached_balance(user_id)
+        if cached:
+            return {
+                "user_id": user_id,
+                "daily_quota": cached.get("daily_quota", 10000),
+                "daily_used": cached.get("daily_used", 0),
+                "available_daily": cached["daily_available"],
+                "bank_reserve": cached["bank_reserve"],
+                "total_available_tokens": cached["daily_available"] + cached["bank_reserve"],
+                "source": "redis_cache"
+            }
+    except Exception:
+        pass  # Redis me koi bhi dikkat aane par DB fallback karega
+
+    # 2. Database Fetch
     wallet = db.query(models.Wallet).filter(models.Wallet.user_id == user_id).first()
     if not wallet:
         raise HTTPException(status_code=404, detail="User not found")
+    
     available_today = wallet.daily_quota - wallet.daily_used
+    
+    # 3. Redis Cache Sync
+    try:
+        redis_client.update_cached_balance(
+            user_id=user_id, 
+            daily_available=available_today, 
+            bank_reserve=wallet.bank_reserve,
+            daily_quota=wallet.daily_quota,
+            daily_used=wallet.daily_used
+        )
+    except Exception:
+        pass
+
     return {
         "user_id": wallet.user_id,
         "daily_quota": wallet.daily_quota,
         "daily_used": wallet.daily_used,
         "available_daily": available_today,
         "bank_reserve": wallet.bank_reserve,
-        "total_available_tokens": available_today + wallet.bank_reserve
+        "total_available_tokens": available_today + wallet.bank_reserve,
+        "source": "database"
     }
+
 
 @app.post("/bank/transfer")
 def transfer_tokens(payload: TransferRequest, db: Session = Depends(get_db)):
@@ -217,3 +267,47 @@ def chat_with_ai(payload: ChatRequest, db: Session = Depends(get_db)):
             "bank_reserve": wallet.bank_reserve
         }
     }
+
+
+
+
+
+
+#ROughhhhhhhhhhhhhhhhhhhhhhhhhhh
+
+# Imports ke sath yeh add karein
+
+
+# # Example: /users/{user_id}/balance me caching lagana
+# @app.get("/users/{user_id}/balance")
+# def get_balance(user_id: str, db: Session = Depends(get_db)):
+#     # 1. Check Redis Cache First
+#     cached = redis_client.get_cached_balance(user_id)
+#     if cached:
+#         return {
+#             "user_id": user_id,
+#             "available_daily": cached["daily_available"],
+#             "bank_reserve": cached["bank_reserve"],
+#             "total_available_tokens": cached["daily_available"] + cached["bank_reserve"],
+#             "source": "redis_cache"
+#         }
+
+#     # 2. Database Fetch
+#     wallet = db.query(models.Wallet).filter(models.Wallet.user_id == user_id).first()
+#     if not wallet:
+#         raise HTTPException(status_code=404, detail="User not found")
+    
+#     available_today = wallet.daily_quota - wallet.daily_used
+    
+#     # 3. Save into Redis
+#     redis_client.update_cached_balance(user_id, available_today, wallet.bank_reserve)
+
+#     return {
+#         "user_id": wallet.user_id,
+#         "daily_quota": wallet.daily_quota,
+#         "daily_used": wallet.daily_used,
+#         "available_daily": available_today,
+#         "bank_reserve": wallet.bank_reserve,
+#         "total_available_tokens": available_today + wallet.bank_reserve,
+#         "source": "database"
+#     }
