@@ -3,3 +3,4 @@ uvicorn[standard]
 sqlalchemy
 pydantic
 apscheduler
+google-genai

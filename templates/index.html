@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>AI Token Bank Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen p-6 font-sans">
+  <div class="max-w-5xl mx-auto space-y-6">
+
+    <!-- Header -->
+    <header class="flex justify-between items-center bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
+      <div>
+        <h1 class="text-2xl font-bold text-sky-400">⚡ AI Token Bank</h1>
+        <p class="text-slate-400 text-sm">Decentralized Token Rollover & P2P AI Gateway</p>
+      </div>
+      <div class="flex items-center space-x-3">
+        <input id="activeUser" type="text" value="user1" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-sky-300 focus:outline-none focus:border-sky-500">
+        <button onclick="fetchBalance()" class="bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded-lg text-sm font-semibold transition">Switch/Refresh</button>
+      </div>
+    </header>
+
+    <!-- Balance Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="bg-slate-800 p-5 rounded-xl border border-slate-700">
+        <span class="text-slate-400 text-xs font-semibold uppercase tracking-wider">Daily Quota Left</span>
+        <div id="dailyAvailable" class="text-3xl font-extrabold text-emerald-400 mt-2">--</div>
+        <p class="text-xs text-slate-500 mt-1">Quota: <span id="dailyQuota">10000</span> | Used: <span id="dailyUsed">0</span></p>
+      </div>
+      <div class="bg-slate-800 p-5 rounded-xl border border-slate-700">
+        <span class="text-slate-400 text-xs font-semibold uppercase tracking-wider">Bank Reserve</span>
+        <div id="bankReserve" class="text-3xl font-extrabold text-amber-400 mt-2">--</div>
+        <p class="text-xs text-slate-500 mt-1">Saved from nightly rollovers</p>
+      </div>
+      <div class="bg-slate-800 p-5 rounded-xl border border-slate-700">
+        <span class="text-slate-400 text-xs font-semibold uppercase tracking-wider">Total Usable AI Balance</span>
+        <div id="totalBalance" class="text-3xl font-extrabold text-sky-400 mt-2">--</div>
+        <p class="text-xs text-slate-500 mt-1">Daily pool + Bank Reserve</p>
+      </div>
+    </div>
+
+    <!-- Actions Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+      <!-- AI Prompt Interface -->
+      <section class="bg-slate-800 p-6 rounded-xl border border-slate-700 space-y-4">
+        <h2 class="text-lg font-bold text-slate-200">🤖 AI Execution Gateway</h2>
+        <textarea id="aiPrompt" rows="3" placeholder="Enter prompt to execute on Gemini..." class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm focus:outline-none focus:border-sky-500"></textarea>
+        <button onclick="sendPrompt()" id="aiBtn" class="w-full bg-indigo-600 hover:bg-indigo-500 py-2.5 rounded-lg font-semibold text-sm transition">Run Prompt</button>
+        <div id="aiOutput" class="hidden bg-slate-950 p-4 rounded-lg border border-slate-800 text-xs space-y-2">
+          <p class="text-slate-400 font-mono" id="aiResultText"></p>
+          <div class="text-[11px] text-sky-400 font-mono border-t border-slate-800 pt-2" id="aiBreakdown"></div>
+        </div>
+      </section>
+
+      <!-- Bank Transfer & Rollover Control -->
+      <section class="bg-slate-800 p-6 rounded-xl border border-slate-700 space-y-4 flex flex-col justify-between">
+        <div>
+          <h2 class="text-lg font-bold text-slate-200 mb-3">💸 P2P Token Transfer</h2>
+          <div class="space-y-3">
+            <input id="receiverId" type="text" placeholder="Receiver User ID (e.g. user2)" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm focus:outline-none focus:border-sky-500">
+            <input id="transferAmount" type="number" placeholder="Token Amount (from Bank Reserve)" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm focus:outline-none focus:border-sky-500">
+            <button onclick="transferTokens()" class="w-full bg-emerald-600 hover:bg-emerald-500 py-2.5 rounded-lg font-semibold text-sm transition">Send Banked Tokens</button>
+          </div>
+        </div>
+
+        <div class="pt-4 border-t border-slate-700">
+          <div class="flex justify-between items-center">
+            <div>
+              <p class="text-xs font-semibold text-slate-300">Midnight Simulation</p>
+              <p class="text-[11px] text-slate-500">Rollover unused daily quota into bank</p>
+            </div>
+            <button onclick="triggerRollover()" class="bg-amber-600 hover:bg-amber-500 px-3 py-1.5 rounded-lg text-xs font-semibold transition">Trigger Rollover</button>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- Passbook Ledger -->
+    <section class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+      <h2 class="text-lg font-bold text-slate-200 mb-4">📜 Passbook Ledger / Transaction History</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="text-slate-400 uppercase bg-slate-900/60 border-b border-slate-700">
+            <tr>
+              <th class="py-2.5 px-3">Type</th>
+              <th class="py-2.5 px-3">Sender</th>
+              <th class="py-2.5 px-3">Receiver</th>
+              <th class="py-2.5 px-3">Tokens</th>
+              <th class="py-2.5 px-3">Timestamp</th>
+            </tr>
+          </thead>
+          <tbody id="historyBody" class="divide-y divide-slate-700/50">
+            <tr><td colspan="5" class="py-3 px-3 text-slate-500 text-center">No transactions found</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </div>
+
+  <script>
+    const getUser = () => document.getElementById('activeUser').value.trim();
+
+    async function fetchBalance() {
+      const user = getUser();
+      if (!user) return;
+      try {
+        const res = await fetch(`/users/${user}/balance`);
+        if (!res.ok) {
+          alert('User not found. Pehle /docs par create karein ya user ID check karein.');
+          return;
+        }
+        const data = await res.json();
+        document.getElementById('dailyAvailable').innerText = data.available_daily;
+        document.getElementById('dailyQuota').innerText = data.daily_quota;
+        document.getElementById('dailyUsed').innerText = data.daily_used;
+        document.getElementById('bankReserve').innerText = data.bank_reserve;
+        document.getElementById('totalBalance').innerText = data.total_available_tokens;
+        fetchHistory();
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function sendPrompt() {
+      const prompt = document.getElementById('aiPrompt').value.trim();
+      const user = getUser();
+      if (!prompt) return;
+
+      const btn = document.getElementById('aiBtn');
+      btn.innerText = 'Running AI...';
+      btn.disabled = true;
+
+      try {
+        const res = await fetch('/v1/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: user, prompt: prompt })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Execution failed');
+
+        document.getElementById('aiOutput').classList.remove('hidden');
+        document.getElementById('aiResultText').innerText = data.response;
+        document.getElementById('aiBreakdown').innerText = 
+          `Used: ${data.tokens_consumed} tokens (Daily: ${data.breakdown.deducted_from_daily}, Bank: ${data.breakdown.deducted_from_bank})`;
+
+        fetchBalance();
+      } catch (err) {
+        alert(err.message);
+      } finally {
+        btn.innerText = 'Run Prompt';
+        btn.disabled = false;
+      }
+    }
+
+    async function transferTokens() {
+      const sender = getUser();
+      const receiver = document.getElementById('receiverId').value.trim();
+      const amount = parseInt(document.getElementById('transferAmount').value);
+
+      if (!receiver || isNaN(amount) || amount <= 0) {
+        alert('Valid receiver aur amount dalein');
+        return;
+      }
+
+      try {
+        const res = await fetch('/bank/transfer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sender_id: sender, receiver_id: receiver, amount: amount })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Transfer failed');
+        alert(data.message);
+        document.getElementById('transferAmount').value = '';
+        fetchBalance();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    async function triggerRollover() {
+      try {
+        const res = await fetch('/bank/trigger-rollover', { method: 'POST' });
+        const data = await res.json();
+        alert(data.message);
+        fetchBalance();
+      } catch (err) {
+        alert('Rollover failed');
+      }
+    }
+
+    async function fetchHistory() {
+      const user = getUser();
+      const res = await fetch(`/users/${user}/history`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const tbody = document.getElementById('historyBody');
+      tbody.innerHTML = '';
+
+      if (data.transactions.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="py-3 px-3 text-slate-500 text-center">No transactions recorded</td></tr>';
+        return;
+      }
+
+      data.transactions.forEach(t => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td class="py-2 px-3 font-semibold ${t.txn_type === 'AI_USAGE' ? 'text-indigo-400' : t.txn_type === 'TRANSFER' ? 'text-emerald-400' : 'text-amber-400'}">${t.txn_type}</td>
+          <td class="py-2 px-3 text-slate-300">${t.sender_id}</td>
+          <td class="py-2 px-3 text-slate-300">${t.receiver_id}</td>
+          <td class="py-2 px-3 font-mono">${t.amount}</td>
+          <td class="py-2 px-3 text-slate-500">${new Date(t.created_at).toLocaleTimeString()}</td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+
+    // Auto-load on open
+    fetchBalance();
+  </script>
+</body>
+</html>
